@@ -1,0 +1,22 @@
+# Secrets and active credentials
+auth.json
+telegram.json
+
+# Local configurations, stores, and caches
+models.json
+models-store.json
+trust.json
+web-search.json
+web-search-cache/
+tmp/
+bin/
+.prompt-backups/
+
+# Runtime sessions and dependencies
+sessions/
+node_modules/
+
+# OS and editor artifacts
+.DS_Store
+*.swp
+*.bak

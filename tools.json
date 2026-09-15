@@ -1,0 +1,21 @@
+{
+  "enabledTools": [
+    "bash",
+    "edit",
+    "write",
+    "ask_user_question",
+    "subagent",
+    "subagents_list",
+    "subagent_message",
+    "web_search",
+    "source_check",
+    "fetch_content",
+    "get_search_content",
+    "todo",
+    "read",
+    "create_goal",
+    "update_goal",
+    "get_goal",
+    "generate_image"
+  ]
+}

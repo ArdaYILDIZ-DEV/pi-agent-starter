@@ -1,0 +1,38 @@
+{
+  "lastChangelogVersion": "0.85.1",
+  "theme": "dark-cc",
+  "defaultProvider": "antigravity",
+  "defaultModel": "YOUR_DEFAULT_MODEL",
+  "packages": [
+    "npm:pi-antigravity",
+    "npm:pi-web-access",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:pi-cc-header",
+    "npm:pi-simplify",
+    "npm:@llblab/pi-telegram",
+    "git:github.com/eleqtrizit/pi-autohooks",
+    "npm:@narumitw/pi-usage"
+  ],
+  "quietStartup": true,
+  "clearOnStart": true,
+  "ccHeader": {
+    "color": "a",
+    "ver": 1,
+    "grad": true,
+    "lines": false,
+    "pkg": false,
+    "speed": 100,
+    "slogan": "Gurur duyacağın bir şey kodla.",
+    "sloganOn": true,
+    "sloganColor": true,
+    "disabled": false
+  },
+  "compaction": {
+    "enabled": true
+  },
+  "tuiMode": "fullscreen",
+  "hideThinkingBlock": true,
+  "showHardwareCursor": true,
+  "fullscreenScrollbar": "auto",
+  "editorPaddingX": 1
+}

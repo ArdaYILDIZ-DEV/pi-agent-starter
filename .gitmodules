@@ -1,0 +1,20 @@
+[submodule "skills"]
+	path = skills
+	url = https://github.com/ArdaYILDIZ-DEV/pi-skills-public.git
+	ignore = dirty
+[submodule "extensions/cc-ui"]
+	path = extensions/cc-ui
+	url = https://github.com/ArdaYILDIZ-DEV/pi-cc-ui.git
+	ignore = dirty
+[submodule "extensions/interactive-subagents"]
+	path = extensions/interactive-subagents
+	url = https://github.com/ArdaYILDIZ-DEV/pi-interactive-subagents.git
+	ignore = dirty
+[submodule "extensions/prompt-snippets"]
+	path = extensions/prompt-snippets
+	url = https://github.com/ArdaYILDIZ-DEV/pi-prompt-snippets.git
+	ignore = dirty
+[submodule "extensions/safe-bash-guard"]
+	path = extensions/safe-bash-guard
+	url = https://github.com/ArdaYILDIZ-DEV/pi-safe-bash-guard.git
+	ignore = dirty

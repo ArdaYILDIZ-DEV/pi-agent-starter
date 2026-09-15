@@ -1,0 +1,15 @@
+{
+  "name": "pi-extensions",
+  "private": true,
+  "dependencies": {
+    "@harms-haus/pi-lens": "^2.1.0",
+    "@juicesharp/rpiv-todo": "^2.10.1",
+    "@llblab/pi-telegram": "^0.48.1",
+    "@narumitw/pi-usage": "^0.60.8",
+    "pi-antigravity": "^0.7.3",
+    "pi-cc-header": "^1.1.1",
+    "pi-lens": "^4.1.5",
+    "pi-simplify": "^0.2.3",
+    "pi-web-access": "^0.29.0"
+  }
+}
