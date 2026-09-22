@@ -30,14 +30,13 @@ Public skills maintained in [`pi-skills-public`](https://github.com/ArdaYILDIZ-D
 | Skill | Description | Invocable |
 |---|---|---|
 | `apple-inspired-web-design` | Apple HIG design tokens, color palette, and layout principles | Automatic |
-| `avoid-ai-design` | UI design audit eliminating generic AI frontend patterns | Automatic |
 | `browsing-reddit` | Token-efficient Reddit reader using `rdt-tidy` | Automatic |
 | `casual-internet-english-writer` | Direct forum, Reddit, and social prose without corporate fluff | Manual |
 | `comment-audit` | Standardized comment and docstring pruning across languages | Automatic |
 | `conventional-commit` | Conventional Commits 1.0.0 message drafting and checks | Automatic |
 | `crafting-tasteful-interfaces` | Production-grade frontend UI with deliberate typography and color tokens | Automatic |
 | `how-to-use-subagents` | Delegation and steering rules for Pi subagents in tmux | Automatic |
-| `no-ai-slop-frontend` | Frontend styling guidance avoiding common AI template tells | Automatic |
+| `no-ai-slop-design` | Frontend UI design and code audit eliminating generic AI patterns | Automatic |
 | `pi-extension-development` | ExtensionAPI guidelines, widgets, and lifecycle hooks | Automatic |
 | `professional-english-writer` | Concise professional English for PRs, issues, and documentation | Manual |
 | `research` | Multi-source web research with scoped queries and exact citations | Automatic |
