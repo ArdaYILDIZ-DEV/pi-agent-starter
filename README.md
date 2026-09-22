@@ -77,7 +77,7 @@ Public skills maintained in [`pi-skills-public`](https://github.com/ArdaYILDIZ-D
 ### System Prompts & Personas
 
 - `SYSTEM.md` (`Elyndra`): Core persona emphasizing instruction hierarchy, live observation, zero fabrication, and concise communication.
-- Specialized personas: Aster (strategy), Caelum (adversarial review), Kaida (entertainment), Liora (companion), and Neris (research).
+- Specialized personas: Aster (strategy), Elyndra (execution), Kaida (entertainment), and Neris (research).
 
 ### Themes & UI (`themes/`)
 

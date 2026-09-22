@@ -2,7 +2,7 @@
 name: scout
 description: Read-only codebase reconnaissance — locates implementation points, maps callers and tests, returns file-and-line evidence; does not implement or run checks
 tools: read, grep, find, ls, safe_bash
-model: antigravity/gemini-3.8-flash
+model: openai-codex/gpt-5.6-luna
 thinking: low
 system-prompt: append
 auto-exit: true

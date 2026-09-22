@@ -2,7 +2,7 @@
 name: researcher
 description: Evidence-backed external research — checks documentation, current facts, and trade-offs; returns source-linked findings and uncertainty, not implementation
 tools: web_search, fetch_content, get_search_content, source_check, web_fetch, read, safe_bash
-model: antigravity/gemini-3.8-flash
+model: antigravity/gemini-3.1-pro
 thinking: medium
 system-prompt: append
 auto-exit: true
