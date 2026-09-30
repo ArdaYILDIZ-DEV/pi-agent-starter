@@ -36,6 +36,7 @@ Public skills maintained in [`pi-skills-public`](https://github.com/ArdaYILDIZ-D
 | `conventional-commit` | Conventional Commits 1.0.0 message drafting and checks | Automatic |
 | `crafting-tasteful-interfaces` | Production-grade frontend UI with deliberate typography and color tokens | Automatic |
 | `how-to-use-subagents` | Delegation and steering rules for Pi subagents in tmux | Automatic |
+| `learn` | Interactive tutoring and conceptual understanding via scaffolding and recall | Automatic |
 | `no-ai-slop-design` | Frontend UI design and code audit eliminating generic AI patterns | Automatic |
 | `pi-extension-development` | ExtensionAPI guidelines, widgets, and lifecycle hooks | Automatic |
 | `professional-english-writer` | Concise professional English for PRs, issues, and documentation | Manual |
@@ -46,7 +47,7 @@ Public skills maintained in [`pi-skills-public`](https://github.com/ArdaYILDIZ-D
 | `writing-great-prompts` | Prompt engineering principles, constraints, and delimiters | Manual |
 | `writing-great-readmes` | Evidence-based technical README authoring | Automatic |
 | `writing-great-skills` | Agent skill authoring, progressive disclosure, and validation tooling | Automatic |
-| `writing-great-system-prompts` | System prompt authority hierarchy and output contracts | Automatic |
+| `writing-great-system-prompts` | System prompt authority hierarchy and output contracts | Manual |
 
 ### Extensions (`extensions/`)
 
