@@ -15,7 +15,7 @@ import { Type } from "typebox";
 const STATE_TYPE = "goal";
 const UI_MESSAGE_TYPE = "goal-ui";
 const CONTINUATION_MESSAGE_TYPE = "goal-continuation";
-const MAX_OBJECTIVE_CHARS = 4_000;
+const MAX_OBJECTIVE_CHARS = 5_000;
 
 type GoalStatus = "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
 

@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.85.1",
+  "lastChangelogVersion": "1.0.0",
   "theme": "dark-cc",
   "packages": [
     "npm:pi-antigravity",
@@ -7,7 +7,6 @@
     "npm:@juicesharp/rpiv-todo",
     "npm:pi-cc-header",
     "npm:pi-simplify",
-    "npm:@llblab/pi-telegram",
     "git:github.com/eleqtrizit/pi-autohooks",
     "npm:@narumitw/pi-usage"
   ],

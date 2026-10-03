@@ -4,6 +4,7 @@ import {
 	type EditorTheme,
 	Key,
 	Text,
+	type TUI,
 	matchesKey,
 	truncateToWidth,
 	wrapTextWithAnsi,
@@ -384,77 +385,248 @@ export async function askTextEditor(
 	}
 }
 
-interface FrameContext {
-	readonly safeWidth: number;
-	readonly lines: string[];
-	readonly add: (text: string) => void;
-	readonly finish: () => string[];
+/**
+ * Pre-renders the question and context text into wrapped lines at a given width.
+ * Results are cached and reused until invalidated or the width changes.
+ */
+interface HeaderLines {
+	/** Wrapped question lines (without leading border). */
+	questionLines: string[];
+	/** Wrapped context lines (without leading blank separator). Empty when no context. */
+	contextLines: string[];
 }
 
-interface RenderCache {
-	invalidate: () => void;
-	startFrame: (
-		width: number,
-	) => { cached: true; lines: string[] } | { cached: false; ctx: FrameContext };
+function wrapHeader(theme: Theme, question: string, context: string | undefined, width: number): HeaderLines {
+	const safeWidth = normalizeWidth(width);
+	const questionLines: string[] = [];
+	addWrapped(questionLines, theme.fg("text", ` ${question}`), safeWidth);
+	const contextLines: string[] = [];
+	if (context) {
+		addWrapped(contextLines, theme.fg("muted", ` ${context}`), safeWidth);
+	}
+	return { questionLines, contextLines };
 }
 
 /**
- * Creates a width-keyed render cache and frame builder for choice prompts.
- * Deduplicates width normalization, caching, top border, question/context wrapping,
- * and bottom border rendering across single-choice and multi-choice TUIs.
+ * Height-aware frame renderer for choice prompts.
  *
- * Complexity & Scale Justification:
- * - Time Complexity: O(1) on cache hit; O(n + d + c) on cache miss, where n is options count
- *   (strictly bounded by MAX_OPTIONS = 20), d is total description length, and c is context length.
- * - Space Complexity: O(1) on cache hit (returns identical array reference without allocation);
- *   O(lines) on cache miss for the new string array.
- * - Since options are capped at MAX_OPTIONS = 20, render frame allocation is negligible (< 100 strings, ~0.05ms)
- *   and cached per-width, so O(n) per keypress without virtual scrolling is optimal and avoids unnecessary complexity.
+ * Allocates the available terminal rows across: top border, question, context,
+ * option list (with a sliding window around the focused item), footer hints, and
+ * bottom border. When the full content fits, all sections render completely.
+ * When it doesn't, the context is trimmed first, then the question, and finally
+ * the option list shows a windowed slice with scroll indicators.
+ *
+ * The result is cached per (width, maxRows, focusedIndex) tuple and invalidated
+ * on any state change that affects layout.
  */
-function createRenderCache(theme: Theme, question: string, context?: string): RenderCache {
+interface BoundedRenderer {
+	invalidate: () => void;
+	render: (
+		width: number,
+		maxRows: number,
+		focusedIndex: number,
+		renderOptionLine: (index: number) => string[],
+		totalOptions: number,
+		footerLines: string[],
+	) => string[];
+}
+
+function createBoundedRenderer(theme: Theme, question: string, context?: string): BoundedRenderer {
 	let cachedLines: string[] | undefined;
-	let cachedWidth = -1;
+	let cacheKey = "";
+	let headerCache: { width: number; header: HeaderLines } | undefined;
 
 	return {
 		invalidate() {
 			cachedLines = undefined;
-			cachedWidth = -1;
+			cacheKey = "";
 		},
-		startFrame(width: number) {
+		render(width, maxRows, focusedIndex, renderOptionLine, totalOptions, footerLines) {
 			const safeWidth = normalizeWidth(width);
-			if (cachedLines && cachedWidth === safeWidth) {
-				return { cached: true, lines: cachedLines };
-			}
+			const safeMax = Math.max(0, Math.floor(maxRows));
+			const key = `${safeWidth}:${safeMax}:${focusedIndex}:${totalOptions}:${footerLines.length}`;
+			if (cachedLines && cacheKey === key) return cachedLines;
 
-			const lines: string[] = [];
-			const add = (text: string) => lines.push(truncateToWidth(text, safeWidth));
+			// Reuse header wrapping when width hasn't changed.
+			if (!headerCache || headerCache.width !== safeWidth) {
+				headerCache = { width: safeWidth, header: wrapHeader(theme, question, context, safeWidth) };
+			}
+			const { questionLines, contextLines } = headerCache.header;
+
 			const border = theme.fg("accent", "─".repeat(safeWidth));
+			const add = (lines: string[], text: string) =>
+				lines.push(truncateToWidth(text, safeWidth));
 
-			// Top border
-			add(border);
-
-			// Question heading
-			addWrapped(lines, theme.fg("text", ` ${question}`), safeWidth);
-
-			// Optional details context
-			if (context) {
-				lines.push("");
-				addWrapped(lines, theme.fg("muted", ` ${context}`), safeWidth);
+			// -- Pre-render all option lines so we know their heights --
+			const allOptionBlocks: string[][] = [];
+			for (let i = 0; i < totalOptions; i++) {
+				allOptionBlocks.push(renderOptionLine(i));
 			}
-			lines.push("");
 
-			const finish = () => {
-				// Bottom border
-				add(border);
+			// -- Compute full (unconstrained) content --
+			// Fixed chrome: top border (1) + blank before options (1) + footer lines + bottom border (1)
+			const fixedChrome = 1 + 1 + footerLines.length + 1;
+			const questionRows = questionLines.length;
+			const contextRows = contextLines.length > 0 ? 1 + contextLines.length : 0; // blank + lines
+			const totalOptionRows = allOptionBlocks.reduce((sum, b) => sum + b.length, 0);
+			const fullHeight = fixedChrome + questionRows + contextRows + totalOptionRows;
+
+			if (safeMax <= 0 || fullHeight <= safeMax) {
+				// Everything fits — render without truncation.
+				const lines: string[] = [];
+				add(lines, border);
+				for (const l of questionLines) add(lines, l);
+				if (contextLines.length > 0) {
+					lines.push("");
+					for (const l of contextLines) add(lines, l);
+				}
+				lines.push("");
+				for (const block of allOptionBlocks) {
+					for (const l of block) add(lines, l);
+				}
+				for (const l of footerLines) add(lines, l);
+				add(lines, border);
 				cachedLines = lines;
-				cachedWidth = safeWidth;
+				cacheKey = key;
 				return lines;
-			};
+			}
 
-			return {
-				cached: false,
-				ctx: { safeWidth, lines, add, finish },
-			};
+			// -- Need to compact: allocate the budget --
+			// Priority: options (especially around focus) > question (at least 1 line) > context
+			let budget = safeMax - fixedChrome;
+			if (budget <= 0) {
+				// Degenerate: terminal too small for even chrome. Show just the border.
+				cachedLines = [border];
+				cacheKey = key;
+				return cachedLines;
+			}
+
+			// Options get first priority — show at least the focused item.
+			let optionBudget = Math.min(totalOptionRows, Math.max(1, budget - 1)); // leave >=1 for question
+			budget -= optionBudget;
+
+			// Question gets at least 1 line from what remains.
+			let qBudget = Math.min(questionRows, budget);
+			budget -= qBudget;
+
+			// Context gets whatever is left.
+			const cBudget = contextLines.length > 0 ? Math.min(1 + contextLines.length, budget) : 0;
+			budget -= cBudget;
+
+			// Give any remaining budget back to the question first, then options.
+			if (budget > 0 && qBudget < questionRows) {
+				const extra = Math.min(budget, questionRows - qBudget);
+				qBudget += extra;
+				budget -= extra;
+			}
+			if (budget > 0 && optionBudget < totalOptionRows) {
+				const extra = Math.min(budget, totalOptionRows - optionBudget);
+				optionBudget += extra;
+				budget -= extra;
+			}
+
+			// -- Render with the computed budgets --
+			const lines: string[] = [];
+			add(lines, border);
+
+			// Question (possibly truncated)
+			for (let i = 0; i < qBudget; i++) add(lines, questionLines[i]);
+			if (qBudget < questionRows) {
+				// Replace last visible question line with a truncation indicator
+				if (qBudget > 0) {
+					lines[lines.length - 1] = truncateToWidth(
+						theme.fg("dim", ` … (${questionRows - qBudget} more line${questionRows - qBudget > 1 ? "s" : ""})`),
+						safeWidth,
+					);
+				}
+			}
+
+			// Context (possibly truncated or omitted)
+			if (cBudget > 0) {
+				lines.push("");
+				const ctxLineBudget = cBudget - 1; // subtract the blank separator
+				for (let i = 0; i < ctxLineBudget && i < contextLines.length; i++) {
+					add(lines, contextLines[i]);
+				}
+				if (ctxLineBudget < contextLines.length && ctxLineBudget > 0) {
+					lines[lines.length - 1] = truncateToWidth(
+						theme.fg("dim", ` … (${contextLines.length - ctxLineBudget} more)`),
+						safeWidth,
+					);
+				}
+			}
+
+			// Options — sliding window centered on the focused item
+			lines.push("");
+			if (optionBudget >= totalOptionRows) {
+				// All options fit
+				for (const block of allOptionBlocks) {
+					for (const l of block) add(lines, l);
+				}
+			} else {
+				// Need to window. Use per-block sliding window.
+				// Reserve 1 row each for scroll indicators (↑/↓) when applicable.
+				const scrollUpIndicator = theme.fg("dim", "  ↑ more options above");
+				const scrollDownIndicator = theme.fg("dim", "  ↓ more options below");
+
+				// We need to find a window of option-blocks that fits in optionBudget
+				// centered on focusedIndex. Account for indicator rows.
+				let bestStart = focusedIndex;
+				let bestEnd = focusedIndex + 1;
+				let usedRows = allOptionBlocks[focusedIndex].length;
+
+				// Expand outward from focused, alternating down/up
+				let lo = focusedIndex - 1;
+				let hi = focusedIndex + 1;
+				while (lo >= 0 || hi < totalOptions) {
+					// Reserve rows for indicators
+					const needUpIndicator = lo >= 0 || bestStart > 0;
+					const needDownIndicator = hi < totalOptions || bestEnd < totalOptions;
+					const indicatorCost = (needUpIndicator && bestStart > 0 ? 1 : 0) +
+						(needDownIndicator && bestEnd < totalOptions ? 1 : 0);
+					const available = optionBudget - indicatorCost;
+
+					if (usedRows >= available) break;
+
+					// Try expanding downward first (more natural)
+					if (hi < totalOptions) {
+						const cost = allOptionBlocks[hi].length;
+						if (usedRows + cost <= available) {
+							usedRows += cost;
+							bestEnd = hi + 1;
+							hi++;
+							continue;
+						}
+					}
+					// Try expanding upward
+					if (lo >= 0) {
+						const cost = allOptionBlocks[lo].length;
+						if (usedRows + cost <= available) {
+							usedRows += cost;
+							bestStart = lo;
+							lo--;
+							continue;
+						}
+					}
+					break;
+				}
+
+				if (bestStart > 0) add(lines, scrollUpIndicator);
+				for (let i = bestStart; i < bestEnd; i++) {
+					for (const l of allOptionBlocks[i]) add(lines, l);
+				}
+				if (bestEnd < totalOptions) add(lines, scrollDownIndicator);
+			}
+
+			// Footer
+			for (const l of footerLines) add(lines, l);
+
+			// Bottom border
+			add(lines, border);
+
+			cachedLines = lines;
+			cacheKey = key;
+			return lines;
 		},
 	};
 }
@@ -486,11 +658,12 @@ export async function askSingleChoice(
 			_kb: unknown,
 			done: (result: AskAnswer | null) => void,
 		): CustomComponent => {
+			const tuiRef = tui as TUI;
 			let isSettled = false;
 			let optionIndex = 0;
 			let editMode = false;
 			const editor = new Editor(tui, createEditorTheme(theme));
-			const cache = createRenderCache(theme, question, context);
+			const bounded = createBoundedRenderer(theme, question, context);
 
 			// Static themed strings pre-formatted to avoid duplicate theme.fg calls on every render frame
 			const editPromptHeader = theme.fg("muted", " Write your custom answer:");
@@ -534,7 +707,7 @@ export async function askSingleChoice(
 			};
 
 			function refresh() {
-				cache.invalidate();
+				bounded.invalidate();
 				tui.requestRender();
 			}
 
@@ -599,44 +772,52 @@ export async function askSingleChoice(
 				}
 			}
 
+			function renderOptionLine(index: number): string[] {
+				const safeWidth = normalizeWidth(tuiRef.terminal.columns);
+				const option = allOptions[index];
+				const selected = index === optionIndex;
+				const prefix = selected ? cursorPrefix : spacePrefix;
+				const label = option.isOther ? option.label : `${option.index}. ${option.label}`;
+				const styled = selected ? theme.fg("accent", label) : theme.fg("text", label);
+				const result = [truncateToWidth(`${prefix}${styled}`, safeWidth)];
+				if (option.description) {
+					addWrapped(result, theme.fg("muted", option.description), safeWidth, "     ");
+				}
+				return result;
+			}
+
 			function render(width: number): string[] {
-				const frame = cache.startFrame(width);
-				if (frame.cached) return frame.lines;
+				const maxRows = tuiRef.terminal.rows;
+				const safeWidth = normalizeWidth(width);
 
-				const { safeWidth, lines, add, finish } = frame.ctx;
-
-				for (let i = 0; i < allOptions.length; i++) {
-					const option = allOptions[i];
-					const selected = i === optionIndex;
-					const prefix = selected ? cursorPrefix : spacePrefix;
-					const label = option.isOther ? option.label : `${option.index}. ${option.label}`;
-					const styled = selected ? theme.fg("accent", label) : theme.fg("text", label);
-					add(`${prefix}${styled}`);
-					if (option.description) {
-						addWrapped(lines, theme.fg("muted", option.description), safeWidth, "     ");
-					}
-				}
-
+				const footerLines: string[] = [];
 				if (editMode) {
-					lines.push("");
-					add(editPromptHeader);
+					footerLines.push("");
+					footerLines.push(editPromptHeader);
 					for (const line of editor.render(Math.max(1, safeWidth - 2))) {
-						add(` ${line}`);
+						footerLines.push(truncateToWidth(` ${line}`, safeWidth));
 					}
-					lines.push("");
-					add(editFooterHint);
+					footerLines.push("");
+					footerLines.push(editFooterHint);
 				} else {
-					lines.push("");
-					add(navFooterHint);
+					footerLines.push("");
+					footerLines.push(navFooterHint);
 				}
 
-				return finish();
+				return bounded.render(
+					width,
+					maxRows,
+					optionIndex,
+					renderOptionLine,
+					allOptions.length,
+					footerLines,
+				);
 			}
 
 			return {
 				render,
 				invalidate: () => {
-					cache.invalidate();
+					bounded.invalidate();
 				},
 				handleInput,
 				dispose: () => {
@@ -683,12 +864,13 @@ export async function askMultiChoice(
 			_kb: unknown,
 			done: (result: AskAnswer[] | null) => void,
 		): CustomComponent => {
+			const tuiRef = tui as TUI;
 			let isSettled = false;
 			let optionIndex = 0;
 			let editMode = false;
 			const selected = new Map<string, AskAnswer>();
 			const editor = new Editor(tui, createEditorTheme(theme));
-			const cache = createRenderCache(theme, question, context);
+			const bounded = createBoundedRenderer(theme, question, context);
 
 			// Static themed strings pre-formatted to avoid duplicate theme.fg calls on every render frame
 			const editPromptHeader = theme.fg("muted", " Write your custom answer:");
@@ -735,7 +917,7 @@ export async function askMultiChoice(
 			};
 
 			function refresh() {
-				cache.invalidate();
+				bounded.invalidate();
 				tui.requestRender();
 			}
 
@@ -840,73 +1022,79 @@ export async function askMultiChoice(
 				}
 			}
 
-			function render(width: number): string[] {
-				const frame = cache.startFrame(width);
-				if (frame.cached) return frame.lines;
+			function renderOptionLine(index: number): string[] {
+				const safeWidth = normalizeWidth(tuiRef.terminal.columns);
+				const item = allItems[index];
+				const isFocused = index === optionIndex;
+				const prefix = isFocused ? cursorPrefix : spacePrefix;
 
-				const { safeWidth, lines, add, finish } = frame.ctx;
-
-				for (let i = 0; i < allItems.length; i++) {
-					const item = allItems[i];
-					const isFocused = i === optionIndex;
-					const prefix = isFocused ? cursorPrefix : spacePrefix;
-
-					if (item.isSubmit) {
-						const label =
-							selected.size > 0 ? `✓ ${item.label} (${selected.size} selected)` : `○ ${item.label}`;
-						const styled = isFocused
-							? theme.fg("accent", label)
-							: theme.fg(selected.size > 0 ? "success" : "dim", label);
-						add(`${prefix}${styled}`);
-						continue;
-					}
-
-					if (item.isOther) {
-						const other = selected.get("other");
-						const marker = other ? "[x]" : "[ ]";
-						const suffix = other ? ` — ${other.label}` : "";
-						const styled = isFocused
-							? theme.fg("accent", `${marker} ${item.label}${suffix}`)
-							: theme.fg(other ? "success" : "text", `${marker} ${item.label}${suffix}`);
-						add(`${prefix}${styled}`);
-						continue;
-					}
-
-					const checked = selected.has(item.id);
-					const marker = checked ? "[x]" : "[ ]";
-					const label = `${marker} ${item.index}. ${item.label}`;
+				if (item.isSubmit) {
+					const label =
+						selected.size > 0 ? `✓ ${item.label} (${selected.size} selected)` : `○ ${item.label}`;
 					const styled = isFocused
 						? theme.fg("accent", label)
-						: theme.fg(checked ? "success" : "text", label);
-					add(`${prefix}${styled}`);
-					if (item.description) {
-						addWrapped(lines, theme.fg("muted", item.description), safeWidth, "     ");
-					}
+						: theme.fg(selected.size > 0 ? "success" : "dim", label);
+					return [truncateToWidth(`${prefix}${styled}`, safeWidth)];
 				}
 
+				if (item.isOther) {
+					const other = selected.get("other");
+					const marker = other ? "[x]" : "[ ]";
+					const suffix = other ? ` — ${other.label}` : "";
+					const styled = isFocused
+						? theme.fg("accent", `${marker} ${item.label}${suffix}`)
+						: theme.fg(other ? "success" : "text", `${marker} ${item.label}${suffix}`);
+					return [truncateToWidth(`${prefix}${styled}`, safeWidth)];
+				}
+
+				const checked = selected.has(item.id);
+				const marker = checked ? "[x]" : "[ ]";
+				const label = `${marker} ${item.index}. ${item.label}`;
+				const styled = isFocused
+					? theme.fg("accent", label)
+					: theme.fg(checked ? "success" : "text", label);
+				const result = [truncateToWidth(`${prefix}${styled}`, safeWidth)];
+				if (item.description) {
+					addWrapped(result, theme.fg("muted", item.description), safeWidth, "     ");
+				}
+				return result;
+			}
+
+			function render(width: number): string[] {
+				const maxRows = tuiRef.terminal.rows;
+				const safeWidth = normalizeWidth(width);
+
+				const footerLines: string[] = [];
 				if (editMode) {
-					lines.push("");
-					add(editPromptHeader);
+					footerLines.push("");
+					footerLines.push(editPromptHeader);
 					for (const line of editor.render(Math.max(1, safeWidth - 2))) {
-						add(` ${line}`);
+						footerLines.push(truncateToWidth(` ${line}`, safeWidth));
 					}
-					lines.push("");
-					add(editFooterHint);
+					footerLines.push("");
+					footerLines.push(editFooterHint);
 				} else {
-					lines.push("");
+					footerLines.push("");
 					if (selected.size === 0) {
-						add(emptySelectionWarning);
+						footerLines.push(emptySelectionWarning);
 					}
-					add(navFooterHint);
+					footerLines.push(navFooterHint);
 				}
 
-				return finish();
+				return bounded.render(
+					width,
+					maxRows,
+					optionIndex,
+					renderOptionLine,
+					allItems.length,
+					footerLines,
+				);
 			}
 
 			return {
 				render,
 				invalidate: () => {
-					cache.invalidate();
+					bounded.invalidate();
 				},
 				handleInput,
 				dispose: () => {

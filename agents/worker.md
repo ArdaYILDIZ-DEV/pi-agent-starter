@@ -3,7 +3,7 @@ name: worker
 description: Scoped implementation worker — makes approved targeted changes, verifies results, and returns an evidence-based handoff; delegates recon or research only when useful
 tools: read, write, edit, bash, grep, find, ls, web_search, fetch_content, get_search_content, web_fetch, source_check, todo
 subagent_agents: scout, researcher
-model: openai-codex/gpt-5.6-luna
+model: antigravity/gemini-3.8-flash
 thinking: high
 system-prompt: append
 auto-exit: true
